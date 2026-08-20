@@ -1,0 +1,73 @@
+{
+  "entities": {
+    "booking": {
+      "title": "Hotel Booking Record",
+      "description": "Master booking record created by hotel staff for guest check-in guide lookup",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "branchId": { "type": "string", "maxLength": 64 },
+        "guestName": { "type": "string", "maxLength": 200 },
+        "identityNumberHash": { "type": "string", "maxLength": 128 },
+        "identityNumberMasked": { "type": "string", "maxLength": 64 },
+        "bookingCode": { "type": "string", "maxLength": 64 },
+        "checkInDate": { "type": "string", "maxLength": 20 },
+        "checkOutDate": { "type": "string", "maxLength": 20 },
+        "roomNumber": { "type": "string", "maxLength": 20 },
+        "status": {
+          "type": "string",
+          "enum": ["PENDING", "ACTIVE", "CHECKED_IN", "CHECKED_OUT", "CANCELLED"]
+        },
+        "instructions": {
+          "type": "object",
+          "description": "Room arrival instructions for guest"
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "branchId", "guestName", "identityNumberHash", "bookingCode", "checkInDate", "checkOutDate", "roomNumber", "status"]
+    },
+    "branch": {
+      "title": "Hotel Branch",
+      "description": "Physical branch location of Lá Hotel",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "name": { "type": "string", "maxLength": 200 },
+        "code": { "type": "string", "maxLength": 32 },
+        "address": { "type": "string", "maxLength": 300 },
+        "phone": { "type": "string", "maxLength": 32 }
+      },
+      "required": ["id", "name", "code", "address", "phone"]
+    },
+    "auditLog": {
+      "title": "Audit Log",
+      "description": "Security and activity logs for hotel management and guest verification attempts",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "action": { "type": "string", "maxLength": 64 },
+        "actor": { "type": "string", "maxLength": 128 },
+        "details": { "type": "string", "maxLength": 500 },
+        "status": { "type": "string", "enum": ["SUCCESS", "FAILED"] }
+      },
+      "required": ["id", "timestamp", "action", "actor", "details", "status"]
+    }
+  },
+  "firestore": {
+    "/branches/{branchId}": {
+      "schema": "branch",
+      "description": "Public directory of Lá Hotel branches"
+    },
+    "/bookings/{bookingId}": {
+      "schema": "booking",
+      "description": "Secure master hotel bookings (Admin-only read and write, never exposed directly to public client queries)"
+    },
+    "/auditLogs/{logId}": {
+      "schema": "auditLog",
+      "description": "Security audit trails for hotel operations"
+    }
+  }
+}

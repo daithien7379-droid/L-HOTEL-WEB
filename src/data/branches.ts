@@ -1,0 +1,106 @@
+import { Branch } from '../types';
+
+export const HOTEL_INFO = {
+  name: 'LÁ HOTEL',
+  slogan: 'Nơi không gian xanh thư giãn cho mọi người',
+  hotline: '086 2245667',
+  hotlineFormatted: '086 2245 667',
+  email: 'lahotelgroup.hcm@gmail.com',
+  website: 'https://lahotel.vn',
+  websiteDisplay: 'lahotel.vn',
+  logoUrl: 'https://lahotel.vn/wp-content/uploads/2026/06/logo-footer-3254.png',
+};
+
+export const BRANCHES: Branch[] = [
+  {
+    id: 'cn-6',
+    name: 'Lá Hotel – Bình Tân (CN 6)',
+    code: 'CN 6',
+    address: 'Số 42 Đường số 7, Phường An Lạc A, Quận Bình Tân, TP.HCM',
+    phone: '086 2245667',
+  },
+  {
+    id: 'cn-3',
+    name: 'Lá Hotel – Hàng Xanh (CN 3)',
+    code: 'CN 3',
+    address: 'Số 184/1A Điện Biên Phủ, Phường 21, Quận Bình Thạnh, TP.HCM',
+    phone: '086 2245667',
+  },
+  {
+    id: 'cn-16',
+    name: 'Lá Hotel – Đường số 21, Gò Vấp (CN 16)',
+    code: 'CN 16',
+    address: 'Số 95 Đường số 21, Phường 8, Quận Gò Vấp, TP.HCM',
+    phone: '086 2245667',
+  },
+  {
+    id: 'cn-15',
+    name: 'Lá Hotel – Nguyễn Văn Dung, Gò Vấp 2 (CN 15)',
+    code: 'CN 15',
+    address: 'Số 38/6 Nguyễn Văn Dung, Phường 6, Quận Gò Vấp, TP.HCM',
+    phone: '086 2245667',
+  },
+  {
+    id: 'cn-11',
+    name: 'Lá Hotel – Phan Huy Ích (CN 11)',
+    code: 'CN 11',
+    address: 'Số 120/15 Phan Huy Ích, Phường 15, Quận Tân Bình, TP.HCM',
+    phone: '086 2245667',
+  },
+  {
+    id: 'cn-7',
+    name: 'Lá Hotel – Phú Nhuận (CN 7)',
+    code: 'CN 7',
+    address: 'Số 72/8 Phan Xích Long, Phường 2, Quận Phú Nhuận, TP.HCM',
+    phone: '086 2245667',
+  },
+  {
+    id: 'cn-4',
+    name: 'Lá Hotel – Quận 10 (CN 4)',
+    code: 'CN 4',
+    address: 'Số 285/12 Cách Mạng Tháng 8, Phường 12, Quận 10, TP.HCM',
+    phone: '086 2245667',
+  },
+  {
+    id: 'cn-5',
+    name: 'Lá Hotel – Quận 3 (CN 5)',
+    code: 'CN 5',
+    address: 'Số 390/4 Lê Văn Sỹ, Phường 14, Quận 3, TP.HCM',
+    phone: '086 2245667',
+  },
+  {
+    id: 'cn-2',
+    name: 'Lá Hotel – Quận Gò Vấp (CN 2)',
+    code: 'CN 2',
+    address: 'Số 148 Quang Trung, Phường 10, Quận Gò Vấp, TP.HCM',
+    phone: '086 2245667',
+  },
+  {
+    id: 'cn-9',
+    name: 'Lá Hotel – Style (CN 9)',
+    code: 'CN 9',
+    address: 'Số 15 Tân Canh, Phường 1, Quận Tân Bình, TP.HCM',
+    phone: '086 2245667',
+  },
+  {
+    id: 'cn-8',
+    name: 'Lá Hotel – Thanh Đa (CN 8)',
+    code: 'CN 8',
+    address: 'Lô IV Cư xá Thanh Đa, Phường 27, Quận Bình Thạnh, TP.HCM',
+    phone: '086 2245667',
+  },
+  {
+    id: 'cn-14',
+    name: 'Lá Hotel – Thoại Ngọc Hầu, Tân Phú (CN 14)',
+    code: 'CN 14',
+    address: 'Số 68 Thoại Ngọc Hầu, Phường Hòa Thạnh, Quận Tân Phú, TP.HCM',
+    phone: '086 2245667',
+  },
+  {
+    id: 'cn-12',
+    name: 'Lá Hotel – Trương Công Định (CN 12)',
+    code: 'CN 12',
+    address: 'Số 102 Trương Công Định, Phường 14, Quận Tân Bình, TP.HCM',
+    phone: '086 2245667',
+  },
+];

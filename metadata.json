@@ -1,0 +1,6 @@
+{
+  "name": "Lá Hotel - Tra Cứu Thông Tin Phòng",
+  "description": "Hệ thống tra cứu thông tin phòng và hướng dẫn nhận phòng bảo mật cho Lá Hotel.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

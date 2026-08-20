@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --color-primary: #0F5B43;
+    --color-primary-dark: #124C3B;
+    --color-primary-soft: #E8F1EC;
+    --color-cream: #FAF9F4;
+    --color-text: #1F2924;
+  }
+
+  body {
+    font-family: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #FAF9F4;
+    color: #1F2924;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: 'Playfair Display', 'Be Vietnam Pro', serif;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #FAF9F4;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #CAD8CE;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #0F5B43;
+}
+
+/* Print Optimization for Room Guide */
+@media print {
+  body {
+    background: #FFFFFF !important;
+    color: #000000 !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+}

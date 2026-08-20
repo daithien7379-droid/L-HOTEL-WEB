@@ -1,0 +1,48 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny all access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email_verified == true && (
+          exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+          request.auth.token.email == 'lahotelgroup.hcm@gmail.com'
+        )
+      );
+    }
+
+    // Branches: Publicly readable, only admins can write
+    match /branches/{branchId} {
+      allow read: if true;
+      allow write: if isValidId(branchId) && isAdmin();
+    }
+
+    // Bookings: STRICT SECURITY - CUSTOMER HAS ZERO DIRECT READ/QUERY PERMISSION
+    // Customers MUST verify only via server-side verification endpoint
+    match /bookings/{bookingId} {
+      allow read: if isValidId(bookingId) && isAdmin();
+      allow create, update, delete: if isValidId(bookingId) && isAdmin();
+    }
+
+    // Audit logs: Only readable and writable by verified admins
+    match /auditLogs/{logId} {
+      allow read: if isValidId(logId) && isAdmin();
+      allow create: if isValidId(logId) && isAdmin();
+      allow update, delete: if false;
+    }
+  }
+}
