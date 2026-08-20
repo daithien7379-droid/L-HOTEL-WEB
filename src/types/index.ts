@@ -1,4 +1,14 @@
 export type BookingStatus = 'PENDING' | 'ACTIVE' | 'CHECKED_IN' | 'CHECKED_OUT' | 'CANCELLED';
+export type PaymentStatus = 'PAID' | 'UNPAID';
+export type IdentityType = 'CCCD' | 'PASSPORT';
+export type IdentityStatus = 'MISSING' | 'PROVIDED' | 'UPLOADED';
+
+export interface IdentityDocuments {
+  frontImageUrl?: string;
+  backImageUrl?: string;
+  passportImageUrl?: string;
+  uploadedAt?: string;
+}
 
 export interface Branch {
   id: string;
@@ -25,12 +35,18 @@ export interface Booking {
   branchId: string;
   guestName: string;
   identityNumber: string; // Plaintext on server only, masked for preview
+  identityType?: IdentityType;
+  identityStatus?: IdentityStatus;
+  identityDocuments?: IdentityDocuments;
   identityNumberHash?: string;
   identityNumberMasked?: string;
   bookingCode: string;
   checkInDate: string; // YYYY-MM-DD
   checkOutDate: string; // YYYY-MM-DD
   roomNumber: string;
+  roomPassword?: string;
+  paymentStatus?: PaymentStatus;
+  paymentAmount?: number;
   status: BookingStatus;
   instructions: BookingInstructions;
   createdAt: string;
@@ -44,9 +60,12 @@ export interface SafeGuestBooking {
   branchAddress: string;
   branchPhone: string;
   roomNumber: string;
+  roomPassword?: string;
   checkInDate: string;
   checkOutDate: string;
   status: BookingStatus;
+  paymentStatus?: PaymentStatus;
+  paymentAmount?: number;
   instructions: {
     directionToRoom: string;
     elevator: string;
@@ -61,11 +80,11 @@ export interface SafeGuestBooking {
 }
 
 export interface GuestVerificationRequest {
-  guestName: string;
-  bookingCode: string;
-  identityNumber: string;
-  checkInDate: string;
-  checkOutDate: string;
+  guestName?: string;
+  bookingCode?: string;
+  identityNumber?: string;
+  checkInDate?: string;
+  checkOutDate?: string;
 }
 
 export interface GuestVerificationResponse {
@@ -74,6 +93,9 @@ export interface GuestVerificationResponse {
   sessionToken?: string;
   expiresAt?: string;
   data?: SafeGuestBooking;
+  requiresIdentity?: boolean;
+  guestName?: string;
+  bookingCode?: string;
   isRateLimited?: boolean;
 }
 

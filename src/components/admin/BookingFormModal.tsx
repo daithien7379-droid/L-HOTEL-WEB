@@ -44,6 +44,9 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
   const [checkInDate, setCheckInDate] = useState('');
   const [checkOutDate, setCheckOutDate] = useState('');
   const [roomNumber, setRoomNumber] = useState('');
+  const [roomPassword, setRoomPassword] = useState('8899#');
+  const [paymentStatus, setPaymentStatus] = useState<'PAID' | 'UNPAID'>('PAID');
+  const [paymentAmount, setPaymentAmount] = useState<number>(750000);
   const [status, setStatus] = useState<BookingStatus>('ACTIVE');
 
   // Instructions states
@@ -66,6 +69,9 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
       setCheckInDate(initialBooking.checkInDate || '');
       setCheckOutDate(initialBooking.checkOutDate || '');
       setRoomNumber(initialBooking.roomNumber || '');
+      setRoomPassword(initialBooking.roomPassword || '8899#');
+      setPaymentStatus(initialBooking.paymentStatus || 'PAID');
+      setPaymentAmount(initialBooking.paymentAmount || 750000);
       setStatus(initialBooking.status || 'ACTIVE');
 
       setDirectionToRoom(initialBooking.instructions?.directionToRoom || '');
@@ -90,6 +96,9 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
       setCheckInDate(today);
       setCheckOutDate(tomorrow);
       setRoomNumber('502');
+      setRoomPassword('8899#');
+      setPaymentStatus('PAID');
+      setPaymentAmount(750000);
       setStatus('ACTIVE');
 
       setDirectionToRoom(
@@ -115,8 +124,8 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!guestName.trim() || !identityNumber.trim() || !bookingCode.trim() || !checkInDate || !checkOutDate || !roomNumber.trim()) {
-      setFormError('Tất cả 6 trường thông tin cơ bản đều là bắt buộc!');
+    if (!guestName.trim() || !bookingCode.trim() || !checkInDate || !checkOutDate || !roomNumber.trim()) {
+      setFormError('Vui lòng nhập đầy đủ các thông tin bắt buộc (Tên khách, Mã booking, Ngày lưu trú, Số phòng)!');
       setActiveTab('basic');
       return;
     }
@@ -124,14 +133,24 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
     setIsSaving(true);
     setFormError(null);
 
+    const hasId = Boolean(identityNumber.trim());
+
     const payload: Partial<Booking> = {
       branchId,
       guestName: guestName.trim(),
       identityNumber: identityNumber.trim(),
+      identityStatus: hasId
+        ? initialBooking?.identityStatus === 'UPLOADED'
+          ? 'UPLOADED'
+          : 'PROVIDED'
+        : 'MISSING',
       bookingCode: bookingCode.trim().toUpperCase(),
       checkInDate,
       checkOutDate,
       roomNumber: roomNumber.trim(),
+      roomPassword: roomPassword.trim(),
+      paymentStatus,
+      paymentAmount: Number(paymentAmount) || 0,
       status,
       instructions: {
         directionToRoom: directionToRoom.trim(),
@@ -282,15 +301,17 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
 
                 {/* CCCD / PASSPORT */}
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-[#354D41] mb-1">
-                    CCCD / Passport <span className="text-red-500">*</span>
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-[#354D41]">
+                      CCCD / Passport
+                    </label>
+                    <span className="text-[11px] text-[#6E887C] font-normal">(Không bắt buộc)</span>
+                  </div>
                   <input
                     type="text"
                     value={identityNumber}
                     onChange={(e) => setIdentityNumber(e.target.value)}
-                    placeholder="Ví dụ: DEMO-079123456789 hoặc 079201004567"
-                    required
+                    placeholder="Để trống nếu khách sẽ tự bổ sung khi nhận phòng"
                     className="w-full px-3.5 py-2.5 bg-[#FAF9F4] border border-[#D5E4DC] focus:border-[#0F5B43] focus:bg-white rounded-xl text-sm font-mono outline-none"
                   />
                 </div>
@@ -325,6 +346,20 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
                   />
                 </div>
 
+                {/* MẬT KHẨU VÀO PHÒNG */}
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-[#354D41] mb-1">
+                    Mật Khẩu Vào Phòng (Khóa cửa)
+                  </label>
+                  <input
+                    type="text"
+                    value={roomPassword}
+                    onChange={(e) => setRoomPassword(e.target.value)}
+                    placeholder="Ví dụ: 8899# hoặc 123456"
+                    className="w-full px-3.5 py-2.5 bg-[#FAF9F4] border border-[#D5E4DC] focus:border-[#0F5B43] focus:bg-white rounded-xl text-sm font-mono font-bold text-[#0F5B43] outline-none"
+                  />
+                </div>
+
                 {/* NGÀY CHECK-IN */}
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-[#354D41] mb-1">
@@ -350,6 +385,37 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
                     onChange={(e) => setCheckOutDate(e.target.value)}
                     required
                     className="w-full px-3.5 py-2.5 bg-[#FAF9F4] border border-[#D5E4DC] focus:border-[#0F5B43] focus:bg-white rounded-xl text-sm font-medium outline-none"
+                  />
+                </div>
+
+                {/* TRẠNG THÁI THANH TOÁN */}
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-[#354D41] mb-1">
+                    Tình Trạng Thanh Toán
+                  </label>
+                  <select
+                    value={paymentStatus}
+                    onChange={(e) => setPaymentStatus(e.target.value as 'PAID' | 'UNPAID')}
+                    className="w-full px-3.5 py-2.5 bg-[#FAF9F4] border border-[#D5E4DC] focus:border-[#0F5B43] focus:bg-white rounded-xl text-sm font-bold outline-none"
+                  >
+                    <option value="PAID">✓ ĐÃ THANH TOÁN</option>
+                    <option value="UNPAID">⚠ CHƯA THANH TOÁN</option>
+                  </select>
+                </div>
+
+                {/* SỐ TIỀN THANH TOÁN */}
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-[#354D41] mb-1">
+                    Số Tiền Thanh Toán (VNĐ)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="10000"
+                    value={paymentAmount}
+                    onChange={(e) => setPaymentAmount(Number(e.target.value))}
+                    placeholder="750000"
+                    className="w-full px-3.5 py-2.5 bg-[#FAF9F4] border border-[#D5E4DC] focus:border-[#0F5B43] focus:bg-white rounded-xl text-sm font-mono font-bold outline-none"
                   />
                 </div>
 

@@ -14,6 +14,7 @@ import {
 import { BookingFormModal } from './BookingFormModal';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { AuditLogsModal } from './AuditLogsModal';
+import { AdminDocumentModal } from './AdminDocumentModal';
 import {
   Users,
   CalendarCheck,
@@ -28,6 +29,7 @@ import {
   Trash2,
   Edit,
   Eye,
+  Camera,
   Shield,
   Activity,
   Calendar,
@@ -61,6 +63,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [deletingBooking, setDeletingBooking] = useState<Booking | null>(null);
   const [isAuditOpen, setIsAuditOpen] = useState(false);
+  const [viewingDocsBooking, setViewingDocsBooking] = useState<Booking | null>(null);
 
   // Status message
   const [bannerMessage, setBannerMessage] = useState<{ text: string; type: 'success' | 'info' } | null>(null);
@@ -422,11 +425,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               <tr>
                 <th className="px-4 py-3.5">Tên Khách</th>
                 <th className="px-4 py-3.5">Mã Booking</th>
-                <th className="px-4 py-3.5">CCCD (Ẩn)</th>
+                <th className="px-4 py-3.5">CCCD / Passport</th>
                 <th className="px-4 py-3.5">Chi Nhánh</th>
-                <th className="px-4 py-3.5">Phòng</th>
-                <th className="px-4 py-3.5">Check-In</th>
-                <th className="px-4 py-3.5">Check-Out</th>
+                <th className="px-4 py-3.5">Phòng & MK</th>
+                <th className="px-4 py-3.5">Lưu Trú</th>
+                <th className="px-4 py-3.5">Thanh Toán</th>
                 <th className="px-4 py-3.5">Trạng Thái</th>
                 <th className="px-4 py-3.5 text-right">Hành Động</th>
               </tr>
@@ -441,6 +444,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               ) : (
                 bookings.map((b) => {
                   const branch = BRANCHES.find((br) => br.id === b.branchId);
+                  const isPaid = b.paymentStatus === 'PAID';
 
                   return (
                     <tr key={b.id} className="hover:bg-[#FAF9F4] transition-colors">
@@ -454,9 +458,37 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         {b.bookingCode}
                       </td>
 
-                      {/* CCCD Masked */}
-                      <td className="px-4 py-3.5 font-mono text-[#6A8476]">
-                        {b.identityNumberMasked || '••••••••'}
+                      {/* CCCD / Passport Status & Masked */}
+                      <td className="px-4 py-3.5">
+                        {b.identityStatus === 'UPLOADED' || (b.identityDocuments && (b.identityDocuments.frontImageUrl || b.identityDocuments.passportImageUrl)) ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold text-[11px]">
+                              <Camera className="w-3 h-3 text-emerald-600" />
+                              ✓ Đã upload
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setViewingDocsBooking(b)}
+                              className="p-1 rounded-md bg-[#E8F1EC] hover:bg-[#0F5B43] text-[#0F5B43] hover:text-white transition-colors"
+                              title="Xem ảnh CCCD/Passport"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (b.identityStatus === 'PROVIDED' || (b.identityNumber && b.identityNumber.trim() && b.identityNumberMasked !== 'Chưa có')) ? (
+                          <div>
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-teal-100 text-teal-800 font-bold text-[11px]">
+                              ✓ {b.identityStatus === 'PROVIDED' ? 'Đã cung cấp' : 'Đã có'}
+                            </span>
+                            <span className="block font-mono text-[11px] text-[#6A8476] mt-0.5">
+                              {b.identityNumberMasked || '••••••••'}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 font-bold text-[11px]">
+                            ⚠ Chưa có
+                          </span>
+                        )}
                       </td>
 
                       {/* Chi Nhánh */}
@@ -467,21 +499,36 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         </span>
                       </td>
 
-                      {/* Số Phòng */}
+                      {/* Số Phòng & MK */}
                       <td className="px-4 py-3.5">
                         <span className="px-2 py-0.5 rounded-md bg-[#E8F1EC] text-[#0F5B43] font-bold">
                           #{b.roomNumber}
                         </span>
+                        {b.roomPassword && (
+                          <span className="block text-[11px] font-mono text-[#547363] mt-0.5">
+                            🔑 {b.roomPassword}
+                          </span>
+                        )}
                       </td>
 
-                      {/* Check-in */}
-                      <td className="px-4 py-3.5 text-[#3A5446]">
-                        {b.checkInDate}
+                      {/* Lưu trú */}
+                      <td className="px-4 py-3.5 text-[11px] text-[#3A5446]">
+                        <div>In: <strong>{b.checkInDate}</strong></div>
+                        <div>Out: <strong>{b.checkOutDate}</strong></div>
                       </td>
 
-                      {/* Check-out */}
-                      <td className="px-4 py-3.5 text-[#3A5446]">
-                        {b.checkOutDate}
+                      {/* Thanh toán */}
+                      <td className="px-4 py-3.5">
+                        <span className={`px-2 py-0.5 rounded-md text-[11px] font-bold ${
+                          isPaid ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                        }`}>
+                          {isPaid ? '✓ ĐÃ TT' : '⚠ CHƯA TT'}
+                        </span>
+                        {typeof b.paymentAmount === 'number' && (
+                          <span className="block text-[11px] font-mono text-[#547363] mt-0.5">
+                            {b.paymentAmount.toLocaleString('vi-VN')} đ
+                          </span>
+                        )}
                       </td>
 
                       {/* Status */}
@@ -575,6 +622,13 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       <AuditLogsModal
         isOpen={isAuditOpen}
         onClose={() => setIsAuditOpen(false)}
+      />
+
+      {/* Identity Document Photo Viewer Modal */}
+      <AdminDocumentModal
+        isOpen={Boolean(viewingDocsBooking)}
+        booking={viewingDocsBooking}
+        onClose={() => setViewingDocsBooking(null)}
       />
     </div>
   );

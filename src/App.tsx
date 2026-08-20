@@ -3,11 +3,19 @@ import { Header } from './components/common/Header';
 import { Footer } from './components/common/Footer';
 import { HeroSection } from './components/customer/HeroSection';
 import { LookupForm } from './components/customer/LookupForm';
+import { IdentityScreen } from './components/customer/IdentityScreen';
 import { RoomResultView } from './components/customer/RoomResultView';
 import { AdminLoginView } from './components/admin/AdminLoginView';
 import { AdminDashboardView } from './components/admin/AdminDashboardView';
 import { SafeGuestBooking } from './types';
 import { getStoredAdminToken, checkAdminAuth } from './services/api';
+
+interface RequiresIdentityData {
+  sessionToken: string;
+  guestName: string;
+  bookingCode: string;
+  expiresAt: string;
+}
 
 export default function App() {
   const [currentView, setCurrentView] = useState<'customer' | 'admin'>('customer');
@@ -17,6 +25,9 @@ export default function App() {
   const [verifiedBooking, setVerifiedBooking] = useState<SafeGuestBooking | null>(null);
   const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [sessionExpiresAt, setSessionExpiresAt] = useState<string | null>(null);
+
+  // Customer identity required state (Case B: Missing CCCD)
+  const [identityPending, setIdentityPending] = useState<RequiresIdentityData | null>(null);
 
   // Check URL path/hash on load
   useEffect(() => {
@@ -69,6 +80,22 @@ export default function App() {
     setVerifiedBooking(data);
     setSessionToken(token);
     setSessionExpiresAt(expiresAt);
+    setIdentityPending(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleRequiresIdentity = (
+    token: string,
+    guestName: string,
+    bookingCode: string,
+    expiresAt: string
+  ) => {
+    setIdentityPending({
+      sessionToken: token,
+      guestName,
+      bookingCode,
+      expiresAt,
+    });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -76,6 +103,7 @@ export default function App() {
     setVerifiedBooking(null);
     setSessionToken(null);
     setSessionExpiresAt(null);
+    setIdentityPending(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -99,10 +127,24 @@ export default function App() {
                 expiresAt={sessionExpiresAt}
                 onReset={handleResetVerification}
               />
+            ) : identityPending ? (
+              <div className="space-y-4 pt-6">
+                <IdentityScreen
+                  sessionToken={identityPending.sessionToken}
+                  guestName={identityPending.guestName}
+                  bookingCode={identityPending.bookingCode}
+                  expiresAt={identityPending.expiresAt}
+                  onSuccess={handleVerificationSuccess}
+                  onCancel={handleResetVerification}
+                />
+              </div>
             ) : (
               <div className="space-y-4">
                 <HeroSection />
-                <LookupForm onSuccess={handleVerificationSuccess} />
+                <LookupForm
+                  onSuccess={handleVerificationSuccess}
+                  onRequiresIdentity={handleRequiresIdentity}
+                />
               </div>
             )}
           </div>

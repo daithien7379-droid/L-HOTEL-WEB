@@ -1,6 +1,7 @@
 import {
   Booking,
   BookingStatus,
+  SafeGuestBooking,
   Branch,
   GuestVerificationRequest,
   GuestVerificationResponse,
@@ -49,6 +50,52 @@ export async function verifyGuest(payload: GuestVerificationRequest): Promise<Gu
     return {
       success: false,
       message: 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra lại đường truyền mạng hoặc liên hệ Lá Hotel.',
+    };
+  }
+}
+
+// 1.1 Provide Guest Identity (Text number)
+export async function provideGuestIdentity(
+  sessionToken: string,
+  identityNumber: string,
+  identityType?: 'CCCD' | 'PASSPORT'
+): Promise<{ success: boolean; message?: string; data?: SafeGuestBooking }> {
+  try {
+    const response = await fetch('/api/guest/provide-identity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionToken, identityNumber, identityType }),
+    });
+    return await response.json();
+  } catch {
+    return {
+      success: false,
+      message: 'Không thể kết nối máy chủ để lưu thông tin CCCD / Passport. Vui lòng thử lại.',
+    };
+  }
+}
+
+// 1.2 Provide Guest Identity Document (Camera photos)
+export async function provideGuestIdentityDocument(
+  sessionToken: string,
+  payload: {
+    identityType: 'CCCD' | 'PASSPORT';
+    frontImage?: string;
+    backImage?: string;
+    passportImage?: string;
+  }
+): Promise<{ success: boolean; message?: string; data?: SafeGuestBooking }> {
+  try {
+    const response = await fetch('/api/guest/provide-identity-document', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionToken, ...payload }),
+    });
+    return await response.json();
+  } catch {
+    return {
+      success: false,
+      message: 'Không thể tải ảnh giấy tờ lên. Vui lòng thử lại.',
     };
   }
 }

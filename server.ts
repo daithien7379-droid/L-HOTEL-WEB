@@ -9,7 +9,7 @@ import { Booking, BookingStatus, SafeGuestBooking, AuditLog, AdminStats } from '
 const app = express();
 const PORT = 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: '25mb' }));
 
 // In-Memory Database with Seed Data
 let bookings: Booking[] = JSON.parse(JSON.stringify(INITIAL_DEMO_BOOKINGS));
@@ -28,7 +28,10 @@ let auditLogs: AuditLog[] = [
 interface GuestSession {
   token: string;
   bookingId: string;
-  safeData: SafeGuestBooking;
+  safeData?: SafeGuestBooking;
+  requiresIdentity?: boolean;
+  guestName?: string;
+  bookingCode?: string;
   expiresAt: number;
 }
 const guestSessions = new Map<string, GuestSession>();
@@ -123,7 +126,7 @@ app.get('/api/branches', (_req: Request, res: Response) => {
   res.json({ success: true, branches: BRANCHES, hotelInfo: HOTEL_INFO });
 });
 
-// Guest Verification Endpoint (Strict 5-Field Match)
+// Guest Verification Endpoint (2-out-of-4 Group Match Logic)
 app.post('/api/verify-guest', (req: Request, res: Response) => {
   const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || 'unknown-ip';
   const now = Date.now();
@@ -148,40 +151,64 @@ app.post('/api/verify-guest', (req: Request, res: Response) => {
 
   const { guestName, bookingCode, identityNumber, checkInDate, checkOutDate } = req.body || {};
 
-  // Validate presence
-  if (!guestName || !bookingCode || !identityNumber || !checkInDate || !checkOutDate) {
+  const hasGuestName = !!(guestName && String(guestName).trim());
+  const hasBookingCode = !!(bookingCode && String(bookingCode).trim());
+  const hasIdentityNumber = !!(identityNumber && String(identityNumber).trim());
+  const hasCheckIn = !!(checkInDate && String(checkInDate).trim());
+  const hasCheckOut = !!(checkOutDate && String(checkOutDate).trim());
+
+  // Date group validation: If one date is entered without the other, inform the user
+  if ((hasCheckIn && !hasCheckOut) || (!hasCheckIn && hasCheckOut)) {
     res.status(400).json({
       success: false,
-      message: 'Vui lòng điền đầy đủ tất cả 5 thông tin tra cứu.',
+      message: 'Nếu sử dụng thông tin ngày lưu trú, vui lòng nhập cả ngày Check-in và Check-out.',
     });
     return;
   }
 
-  const normGuestName = normalizeString(guestName);
-  const normBookingCode = String(bookingCode).trim().toUpperCase();
-  const normIdentity = String(identityNumber).trim().toUpperCase().replace(/[\s-]/g, '');
-  const normCheckIn = normalizeDate(String(checkInDate));
-  const normCheckOut = normalizeDate(String(checkOutDate));
+  const hasStayDates = hasCheckIn && hasCheckOut;
 
-  // Search matching booking
-  const matched = bookings.find((b) => {
-    const bName = normalizeString(b.guestName);
-    const bCode = b.bookingCode.trim().toUpperCase();
-    const bIdentity = b.identityNumber.trim().toUpperCase().replace(/[\s-]/g, '');
-    const bCheckIn = normalizeDate(b.checkInDate);
-    const bCheckOut = normalizeDate(b.checkOutDate);
+  // Identify provided groups
+  const providedGroups: string[] = [];
+  if (hasGuestName) providedGroups.push('guestName');
+  if (hasBookingCode) providedGroups.push('bookingCode');
+  if (hasIdentityNumber) providedGroups.push('identityNumber');
+  if (hasStayDates) providedGroups.push('stayDates');
 
-    return (
-      bName === normGuestName &&
-      bCode === normBookingCode &&
-      bIdentity === normIdentity &&
-      bCheckIn === normCheckIn &&
-      bCheckOut === normCheckOut
-    );
+  // Verify at least 2 out of 4 groups provided
+  if (providedGroups.length < 2) {
+    res.status(400).json({
+      success: false,
+      message: 'Vui lòng nhập ít nhất 2 trong 4 nhóm thông tin để tra cứu.',
+    });
+    return;
+  }
+
+  const normGuestName = hasGuestName ? normalizeString(String(guestName)) : '';
+  const normBookingCode = hasBookingCode ? String(bookingCode).trim().toUpperCase() : '';
+  const normIdentity = hasIdentityNumber ? String(identityNumber).trim().toUpperCase().replace(/[\s-]/g, '') : '';
+  const normCheckIn = hasStayDates ? normalizeDate(String(checkInDate)) : '';
+  const normCheckOut = hasStayDates ? normalizeDate(String(checkOutDate)) : '';
+
+  // Search matching bookings - all provided groups must MATCH strictly (AND condition)
+  const matchedBookings = bookings.filter((b) => {
+    if (hasGuestName) {
+      if (normalizeString(b.guestName) !== normGuestName) return false;
+    }
+    if (hasBookingCode) {
+      if (b.bookingCode.trim().toUpperCase() !== normBookingCode) return false;
+    }
+    if (hasIdentityNumber) {
+      if (b.identityNumber.trim().toUpperCase().replace(/[\s-]/g, '') !== normIdentity) return false;
+    }
+    if (hasStayDates) {
+      if (normalizeDate(b.checkInDate) !== normCheckIn || normalizeDate(b.checkOutDate) !== normCheckOut) return false;
+    }
+    return true;
   });
 
-  // Check if no match or cancelled
-  if (!matched || matched.status === 'CANCELLED') {
+  // Case 1: No match found
+  if (matchedBookings.length === 0) {
     // Record failed attempt
     const currentCount = (rateRecord?.count || 0) + 1;
     rateLimits.set(clientIp, {
@@ -192,7 +219,7 @@ app.post('/api/verify-guest', (req: Request, res: Response) => {
     addAuditLog(
       'VERIFY_FAILED',
       'guest',
-      `Tra cứu không khớp: Mã [${normBookingCode}], Tên [${guestName}], CCCD [${maskIdentity(identityNumber)}]`,
+      `Tra cứu không khớp (${providedGroups.join('+')}): Mã [${normBookingCode || 'N/A'}], Tên [${guestName || 'N/A'}], CCCD [${hasIdentityNumber ? maskIdentity(identityNumber) : 'N/A'}]`,
       'FAILED',
       clientIp
     );
@@ -205,59 +232,310 @@ app.post('/api/verify-guest', (req: Request, res: Response) => {
     return;
   }
 
+  // Case 2: Ambiguous match (Multiple bookings matched the 2 provided groups)
+  if (matchedBookings.length > 1) {
+    res.status(400).json({
+      success: false,
+      message: 'Có nhiều thông tin đặt phòng phù hợp. Vui lòng nhập thêm Mã đặt phòng hoặc CCCD/Passport để xác minh.',
+    });
+    return;
+  }
+
+  // Exactly 1 booking matches
+  const matched = matchedBookings[0];
+
+  // Case 3: Booking is Cancelled
+  if (matched.status === 'CANCELLED') {
+    res.status(400).json({
+      success: false,
+      message: 'Booking này đã được hủy. Vui lòng liên hệ Lá Hotel để được hỗ trợ.',
+    });
+    return;
+  }
+
   // Reset rate limits upon successful verification
   rateLimits.delete(clientIp);
 
   // Find Branch Info
   const branch = BRANCHES.find((br) => br.id === matched.branchId) || BRANCHES[0];
 
-  // Construct Safe Guest Response (NO CCCD, NO INTERNAL NOTES)
-  const safeData: SafeGuestBooking = {
-    guestName: matched.guestName,
-    branchName: branch.name,
-    branchAddress: branch.address,
-    branchPhone: branch.phone,
-    roomNumber: matched.roomNumber,
-    checkInDate: matched.checkInDate,
-    checkOutDate: matched.checkOutDate,
-    status: matched.status,
+  const buildSafeGuest = (b: Booking, br: typeof branch): SafeGuestBooking => ({
+    guestName: b.guestName,
+    branchName: br.name,
+    branchAddress: br.address,
+    branchPhone: br.phone,
+    roomNumber: b.roomNumber,
+    roomPassword: b.roomPassword || '',
+    checkInDate: b.checkInDate,
+    checkOutDate: b.checkOutDate,
+    status: b.status,
+    paymentStatus: b.paymentStatus || 'UNPAID',
+    paymentAmount: typeof b.paymentAmount === 'number' ? b.paymentAmount : 0,
     instructions: {
-      directionToRoom: matched.instructions?.directionToRoom || '',
-      elevator: matched.instructions?.elevator || '',
-      stairs: matched.instructions?.stairs || '',
-      parking: matched.instructions?.parking || '',
-      complimentaryItems: matched.instructions?.complimentaryItems || '',
-      roomInstructions: matched.instructions?.roomInstructions || '',
-      wifiName: matched.instructions?.wifiName || 'LA_HOTEL_GUEST',
-      wifiPassword: matched.instructions?.wifiPassword || 'lahotel2026',
-      importantNotes: matched.instructions?.importantNotes || '',
+      directionToRoom: b.instructions?.directionToRoom || '',
+      elevator: b.instructions?.elevator || '',
+      stairs: b.instructions?.stairs || '',
+      parking: b.instructions?.parking || '',
+      complimentaryItems: b.instructions?.complimentaryItems || '',
+      roomInstructions: b.instructions?.roomInstructions || '',
+      wifiName: b.instructions?.wifiName || 'LA_HOTEL_GUEST',
+      wifiPassword: b.instructions?.wifiPassword || 'lahotel2026',
+      importantNotes: b.instructions?.importantNotes || '',
     },
-  };
+  });
+
+  // Check if booking already has CCCD / Passport in database
+  const hasStoredIdentity = Boolean(
+    (matched.identityNumber && matched.identityNumber.trim()) ||
+    matched.identityStatus === 'PROVIDED' ||
+    matched.identityStatus === 'UPLOADED'
+  );
 
   // Generate 15-minute temporary session token
   const sessionToken = crypto.randomBytes(24).toString('hex');
   const expiresAt = now + 15 * 60 * 1000;
 
+  // CASE B: Missing CCCD / Passport -> Do NOT return room details yet!
+  if (!hasStoredIdentity) {
+    guestSessions.set(sessionToken, {
+      token: sessionToken,
+      bookingId: matched.id,
+      requiresIdentity: true,
+      guestName: matched.guestName,
+      bookingCode: matched.bookingCode,
+      expiresAt,
+    });
+
+    addAuditLog(
+      'VERIFY_SUCCESS',
+      'guest',
+      `Khách [${matched.guestName}] đã tra cứu booking [${matched.bookingCode}] thành công, hệ thống chuyển sang bước bổ sung CCCD/Passport.`,
+      'SUCCESS',
+      clientIp
+    );
+
+    res.json({
+      success: true,
+      requiresIdentity: true,
+      message: 'Khách sạn chưa có thông tin CCCD / Passport của bạn. Vui lòng cung cấp thông tin để hoàn tất thủ tục nhận phòng.',
+      sessionToken,
+      expiresAt: new Date(expiresAt).toISOString(),
+      guestName: matched.guestName,
+      bookingCode: matched.bookingCode,
+    });
+    return;
+  }
+
+  // CASE A: CCCD / Passport exists -> Return Room Result immediately
+  const safeData = buildSafeGuest(matched, branch);
+
   guestSessions.set(sessionToken, {
     token: sessionToken,
     bookingId: matched.id,
     safeData,
+    requiresIdentity: false,
+    guestName: matched.guestName,
+    bookingCode: matched.bookingCode,
     expiresAt,
   });
 
   addAuditLog(
     'VERIFY_SUCCESS',
     'guest',
-    `Khách [${matched.guestName}] đã tra cứu thành công phòng [${matched.roomNumber}] tại [${branch.name}]`,
+    `Khách [${matched.guestName}] đã tra cứu thành công phòng [${matched.roomNumber}] tại [${branch.name}] (Khớp nhóm: ${providedGroups.join(', ')})`,
     'SUCCESS',
     clientIp
   );
 
   res.json({
     success: true,
+    requiresIdentity: false,
     message: 'Thông tin phòng của bạn đã được xác nhận.',
     sessionToken,
     expiresAt: new Date(expiresAt).toISOString(),
+    data: safeData,
+  });
+});
+
+// 1.1 Guest Provide Identity (Text number)
+app.post('/api/guest/provide-identity', (req: Request, res: Response) => {
+  const { sessionToken, identityNumber, identityType } = req.body || {};
+  const clientIp = req.ip || req.socket.remoteAddress;
+
+  if (!sessionToken || !identityNumber || !String(identityNumber).trim()) {
+    res.status(400).json({ success: false, message: 'Vui lòng kiểm tra lại số CCCD / Passport.' });
+    return;
+  }
+
+  const session = guestSessions.get(sessionToken);
+  if (!session || Date.now() > session.expiresAt) {
+    res.status(401).json({ success: false, message: 'Phiên tra cứu không hợp lệ hoặc đã hết hạn. Vui lòng tra cứu lại.' });
+    return;
+  }
+
+  const booking = bookings.find((b) => b.id === session.bookingId);
+  if (!booking) {
+    res.status(404).json({ success: false, message: 'Không tìm thấy thông tin đặt phòng.' });
+    return;
+  }
+
+  const cleanIdentity = String(identityNumber).trim();
+  if (cleanIdentity.length < 4 || cleanIdentity.length > 30 || /[<>{}\\]/.test(cleanIdentity)) {
+    res.status(400).json({ success: false, message: 'Vui lòng kiểm tra lại số CCCD / Passport.' });
+    return;
+  }
+
+  // Update booking record
+  booking.identityNumber = cleanIdentity;
+  booking.identityNumberMasked = maskIdentity(cleanIdentity);
+  booking.identityType = identityType || (/^\d{9,12}$/.test(cleanIdentity) ? 'CCCD' : 'PASSPORT');
+  booking.identityStatus = 'PROVIDED';
+  booking.updatedAt = new Date().toISOString();
+
+  const branch = BRANCHES.find((br) => br.id === booking.branchId) || BRANCHES[0];
+  const safeData: SafeGuestBooking = {
+    guestName: booking.guestName,
+    branchName: branch.name,
+    branchAddress: branch.address,
+    branchPhone: branch.phone,
+    roomNumber: booking.roomNumber,
+    roomPassword: booking.roomPassword || '',
+    checkInDate: booking.checkInDate,
+    checkOutDate: booking.checkOutDate,
+    status: booking.status,
+    paymentStatus: booking.paymentStatus || 'UNPAID',
+    paymentAmount: typeof booking.paymentAmount === 'number' ? booking.paymentAmount : 0,
+    instructions: {
+      directionToRoom: booking.instructions?.directionToRoom || '',
+      elevator: booking.instructions?.elevator || '',
+      stairs: booking.instructions?.stairs || '',
+      parking: booking.instructions?.parking || '',
+      complimentaryItems: booking.instructions?.complimentaryItems || '',
+      roomInstructions: booking.instructions?.roomInstructions || '',
+      wifiName: booking.instructions?.wifiName || 'LA_HOTEL_GUEST',
+      wifiPassword: booking.instructions?.wifiPassword || 'lahotel2026',
+      importantNotes: booking.instructions?.importantNotes || '',
+    },
+  };
+
+  // Update session
+  session.safeData = safeData;
+  session.requiresIdentity = false;
+
+  addAuditLog(
+    'UPDATE_BOOKING',
+    'guest',
+    `Khách [${booking.guestName}] đã cung cấp thông tin số giấy tờ (${booking.identityType}) cho booking [${booking.bookingCode}]`,
+    'SUCCESS',
+    clientIp
+  );
+
+  res.json({
+    success: true,
+    message: 'Xác nhận thông tin định danh thành công.',
+    data: safeData,
+  });
+});
+
+// 1.2 Guest Provide Identity Document (Camera Photos)
+app.post('/api/guest/provide-identity-document', (req: Request, res: Response) => {
+  const { sessionToken, identityType, frontImage, backImage, passportImage } = req.body || {};
+  const clientIp = req.ip || req.socket.remoteAddress;
+
+  if (!sessionToken || !identityType) {
+    res.status(400).json({ success: false, message: 'Yêu cầu không hợp lệ.' });
+    return;
+  }
+
+  const session = guestSessions.get(sessionToken);
+  if (!session || Date.now() > session.expiresAt) {
+    res.status(401).json({ success: false, message: 'Phiên tra cứu không hợp lệ hoặc đã hết hạn. Vui lòng tra cứu lại.' });
+    return;
+  }
+
+  const booking = bookings.find((b) => b.id === session.bookingId);
+  if (!booking) {
+    res.status(404).json({ success: false, message: 'Không tìm thấy thông tin đặt phòng.' });
+    return;
+  }
+
+  if (identityType === 'CCCD') {
+    if (!frontImage || !backImage) {
+      res.status(400).json({ success: false, message: 'Vui lòng chụp đầy đủ mặt trước và mặt sau giấy tờ.' });
+      return;
+    }
+  } else if (identityType === 'PASSPORT') {
+    if (!passportImage && !frontImage) {
+      res.status(400).json({ success: false, message: 'Vui lòng chụp ảnh mặt thông tin Passport.' });
+      return;
+    }
+  }
+
+  // Validate data url prefix
+  const isValidImage = (img?: string) =>
+    !img ||
+    (typeof img === 'string' &&
+      (img.startsWith('data:image/jpeg') ||
+        img.startsWith('data:image/png') ||
+        img.startsWith('data:image/webp')));
+
+  if (!isValidImage(frontImage) || !isValidImage(backImage) || !isValidImage(passportImage)) {
+    res.status(400).json({ success: false, message: 'Định dạng ảnh không hợp lệ. Vui lòng chụp lại.' });
+    return;
+  }
+
+  // Update booking record
+  booking.identityType = identityType;
+  booking.identityStatus = 'UPLOADED';
+  booking.identityDocuments = {
+    frontImageUrl: frontImage,
+    backImageUrl: backImage,
+    passportImageUrl: passportImage || (identityType === 'PASSPORT' ? frontImage : undefined),
+    uploadedAt: new Date().toISOString(),
+  };
+  booking.updatedAt = new Date().toISOString();
+
+  const branch = BRANCHES.find((br) => br.id === booking.branchId) || BRANCHES[0];
+  const safeData: SafeGuestBooking = {
+    guestName: booking.guestName,
+    branchName: branch.name,
+    branchAddress: branch.address,
+    branchPhone: branch.phone,
+    roomNumber: booking.roomNumber,
+    roomPassword: booking.roomPassword || '',
+    checkInDate: booking.checkInDate,
+    checkOutDate: booking.checkOutDate,
+    status: booking.status,
+    paymentStatus: booking.paymentStatus || 'UNPAID',
+    paymentAmount: typeof booking.paymentAmount === 'number' ? booking.paymentAmount : 0,
+    instructions: {
+      directionToRoom: booking.instructions?.directionToRoom || '',
+      elevator: booking.instructions?.elevator || '',
+      stairs: booking.instructions?.stairs || '',
+      parking: booking.instructions?.parking || '',
+      complimentaryItems: booking.instructions?.complimentaryItems || '',
+      roomInstructions: booking.instructions?.roomInstructions || '',
+      wifiName: booking.instructions?.wifiName || 'LA_HOTEL_GUEST',
+      wifiPassword: booking.instructions?.wifiPassword || 'lahotel2026',
+      importantNotes: booking.instructions?.importantNotes || '',
+    },
+  };
+
+  // Update session
+  session.safeData = safeData;
+  session.requiresIdentity = false;
+
+  addAuditLog(
+    'UPDATE_BOOKING',
+    'guest',
+    `Khách [${booking.guestName}] đã chụp và tải lên ảnh giấy tờ (${identityType}) cho booking [${booking.bookingCode}]`,
+    'SUCCESS',
+    clientIp
+  );
+
+  res.json({
+    success: true,
+    message: 'Tải lên ảnh giấy tờ thành công.',
     data: safeData,
   });
 });
@@ -278,8 +556,21 @@ app.get('/api/guest-session/:token', (req: Request, res: Response) => {
     return;
   }
 
+  if (session.requiresIdentity) {
+    res.json({
+      success: true,
+      requiresIdentity: true,
+      guestName: session.guestName,
+      bookingCode: session.bookingCode,
+      expiresAt: new Date(session.expiresAt).toISOString(),
+      remainingSeconds: Math.max(0, Math.floor((session.expiresAt - Date.now()) / 1000)),
+    });
+    return;
+  }
+
   res.json({
     success: true,
+    requiresIdentity: false,
     data: session.safeData,
     expiresAt: new Date(session.expiresAt).toISOString(),
     remainingSeconds: Math.max(0, Math.floor((session.expiresAt - Date.now()) / 1000)),
@@ -383,34 +674,47 @@ app.post('/api/admin/bookings', requireAdmin, (req: Request, res: Response) => {
   const {
     branchId,
     guestName,
-    identityNumber,
+    identityNumber = '',
+    identityType,
+    identityStatus,
     bookingCode,
     checkInDate,
     checkOutDate,
     roomNumber,
+    roomPassword = '',
+    paymentStatus = 'PAID',
+    paymentAmount = 0,
     status = 'ACTIVE',
     instructions = {},
   } = req.body || {};
 
-  // Validate mandatory fields
-  if (!branchId || !guestName || !identityNumber || !bookingCode || !checkInDate || !checkOutDate || !roomNumber) {
+  // Validate mandatory fields (identityNumber is optional)
+  if (!branchId || !guestName || !bookingCode || !checkInDate || !checkOutDate || !roomNumber) {
     res.status(400).json({
       success: false,
-      message: 'Tất cả các trường thông tin đặt phòng cơ bản đều bắt buộc.',
+      message: 'Vui lòng điền đầy đủ các thông tin bắt buộc: Chi nhánh, Tên khách, Mã booking, Ngày lưu trú, Số phòng.',
     });
     return;
   }
+
+  const cleanIdentity = String(identityNumber || '').trim();
+  const calculatedStatus = identityStatus || (cleanIdentity ? 'PROVIDED' : 'MISSING');
 
   const newBooking: Booking = {
     id: `bk-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
     branchId,
     guestName: String(guestName).trim(),
-    identityNumber: String(identityNumber).trim(),
-    identityNumberMasked: maskIdentity(String(identityNumber)),
+    identityNumber: cleanIdentity,
+    identityNumberMasked: cleanIdentity ? maskIdentity(cleanIdentity) : 'Chưa có',
+    identityType: identityType || (cleanIdentity ? (/^\d{9,12}$/.test(cleanIdentity) ? 'CCCD' : 'PASSPORT') : undefined),
+    identityStatus: calculatedStatus,
     bookingCode: String(bookingCode).trim().toUpperCase(),
     checkInDate: normalizeDate(String(checkInDate)),
     checkOutDate: normalizeDate(String(checkOutDate)),
     roomNumber: String(roomNumber).trim(),
+    roomPassword: String(roomPassword || '').trim(),
+    paymentStatus: paymentStatus === 'UNPAID' ? 'UNPAID' : 'PAID',
+    paymentAmount: typeof paymentAmount === 'number' ? paymentAmount : (Number(paymentAmount) || 0),
     status: (status as BookingStatus) || 'ACTIVE',
     instructions: {
       directionToRoom: instructions.directionToRoom || '',
@@ -454,26 +758,39 @@ app.put('/api/admin/bookings/:id', requireAdmin, (req: Request, res: Response) =
     branchId,
     guestName,
     identityNumber,
+    identityType,
+    identityStatus,
+    identityDocuments,
     bookingCode,
     checkInDate,
     checkOutDate,
     roomNumber,
+    roomPassword,
+    paymentStatus,
+    paymentAmount,
     status,
     instructions,
   } = req.body || {};
 
   const existing = bookings[index];
+  const newIdentityNum = identityNumber !== undefined ? String(identityNumber).trim() : existing.identityNumber;
 
   const updated: Booking = {
     ...existing,
     branchId: branchId || existing.branchId,
     guestName: guestName ? String(guestName).trim() : existing.guestName,
-    identityNumber: identityNumber ? String(identityNumber).trim() : existing.identityNumber,
-    identityNumberMasked: identityNumber ? maskIdentity(String(identityNumber)) : existing.identityNumberMasked,
+    identityNumber: newIdentityNum,
+    identityNumberMasked: newIdentityNum ? maskIdentity(newIdentityNum) : 'Chưa có',
+    identityType: identityType || existing.identityType,
+    identityStatus: identityStatus || (newIdentityNum ? (existing.identityStatus === 'UPLOADED' ? 'UPLOADED' : 'PROVIDED') : (existing.identityDocuments ? 'UPLOADED' : 'MISSING')),
+    identityDocuments: identityDocuments !== undefined ? identityDocuments : existing.identityDocuments,
     bookingCode: bookingCode ? String(bookingCode).trim().toUpperCase() : existing.bookingCode,
     checkInDate: checkInDate ? normalizeDate(String(checkInDate)) : existing.checkInDate,
     checkOutDate: checkOutDate ? normalizeDate(String(checkOutDate)) : existing.checkOutDate,
     roomNumber: roomNumber ? String(roomNumber).trim() : existing.roomNumber,
+    roomPassword: roomPassword !== undefined ? String(roomPassword).trim() : existing.roomPassword,
+    paymentStatus: paymentStatus !== undefined ? (paymentStatus === 'UNPAID' ? 'UNPAID' : 'PAID') : existing.paymentStatus,
+    paymentAmount: paymentAmount !== undefined ? (typeof paymentAmount === 'number' ? paymentAmount : (Number(paymentAmount) || 0)) : existing.paymentAmount,
     status: (status as BookingStatus) || existing.status,
     instructions: instructions ? { ...existing.instructions, ...instructions } : existing.instructions,
     updatedAt: new Date().toISOString(),

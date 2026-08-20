@@ -6,8 +6,6 @@ import {
   MapPin,
   Calendar,
   KeyRound,
-  Eye,
-  EyeOff,
   Copy,
   Check,
   QrCode,
@@ -24,6 +22,8 @@ import {
   Clock,
   Building,
   AlertTriangle,
+  CreditCard,
+  Lock,
 } from 'lucide-react';
 
 interface RoomResultViewProps {
@@ -38,7 +38,7 @@ export const RoomResultView: React.FC<RoomResultViewProps> = ({
   expiresAt,
   onReset,
 }) => {
-  const [showWifiPassword, setShowWifiPassword] = useState(false);
+  const [copiedRoomPass, setCopiedRoomPass] = useState(false);
   const [copiedWifi, setCopiedWifi] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
   const [secondsRemaining, setSecondsRemaining] = useState<number>(15 * 60);
@@ -62,6 +62,14 @@ export const RoomResultView: React.FC<RoomResultViewProps> = ({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const handleCopyRoomPass = () => {
+    if (booking.roomPassword) {
+      navigator.clipboard.writeText(booking.roomPassword);
+      setCopiedRoomPass(true);
+      setTimeout(() => setCopiedRoomPass(false), 2500);
+    }
+  };
+
   const handleCopyWifi = () => {
     if (booking.instructions.wifiPassword) {
       navigator.clipboard.writeText(booking.instructions.wifiPassword);
@@ -79,10 +87,16 @@ export const RoomResultView: React.FC<RoomResultViewProps> = ({
     return dateStr;
   };
 
+  const formatCurrency = (amount?: number) => {
+    if (typeof amount !== 'number' || isNaN(amount)) return '0 VNĐ';
+    return `${amount.toLocaleString('vi-VN')} VNĐ`;
+  };
+
   const isCheckedOut = booking.status === 'CHECKED_OUT';
+  const isPaid = booking.paymentStatus === 'PAID';
 
   return (
-    <div id="room-result-container" className="max-w-4xl mx-auto px-4 py-8 pb-16 space-y-6">
+    <div id="room-result-container" className="max-w-4xl mx-auto px-4 py-6 sm:py-8 pb-16 space-y-6">
       {/* 15-minute session security banner */}
       <div
         id="session-timer-banner"
@@ -143,7 +157,7 @@ export const RoomResultView: React.FC<RoomResultViewProps> = ({
 
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
           {/* Room Number Hero */}
-          <div className="space-y-1">
+          <div className="space-y-2">
             <div className="flex items-center gap-2 text-xs font-semibold text-[#8CD1B0] uppercase tracking-widest">
               <KeyRound className="w-4 h-4" />
               <span>PHÒNG CỦA BẠN</span>
@@ -163,8 +177,8 @@ export const RoomResultView: React.FC<RoomResultViewProps> = ({
             </div>
           </div>
 
-          {/* Dates & Quick Meta */}
-          <div className="bg-white/10 backdrop-blur-xs rounded-2xl p-4 sm:p-5 border border-white/15 space-y-3 min-w-[240px]">
+          {/* Dates & Payment Card */}
+          <div className="bg-white/10 backdrop-blur-xs rounded-2xl p-4 sm:p-5 border border-white/15 space-y-3 min-w-[260px]">
             <div className="flex items-center justify-between gap-4 text-xs pb-2 border-b border-white/10">
               <span className="text-[#A1C9B3] uppercase font-semibold">Check-In</span>
               <span id="display-checkin-date" className="font-bold text-sm text-white flex items-center gap-1">
@@ -172,13 +186,122 @@ export const RoomResultView: React.FC<RoomResultViewProps> = ({
                 {formatDateDisplay(booking.checkInDate)}
               </span>
             </div>
-            <div className="flex items-center justify-between gap-4 text-xs">
+            <div className="flex items-center justify-between gap-4 text-xs pb-2 border-b border-white/10">
               <span className="text-[#A1C9B3] uppercase font-semibold">Check-Out</span>
               <span id="display-checkout-date" className="font-bold text-sm text-white flex items-center gap-1">
                 <Calendar className="w-3.5 h-3.5 text-[#8CD1B0]" />
                 {formatDateDisplay(booking.checkOutDate)}
               </span>
             </div>
+            {/* Payment in Header Card */}
+            <div className="flex items-center justify-between gap-2 pt-1 text-xs">
+              <span className="text-[#A1C9B3] uppercase font-semibold">Thanh toán:</span>
+              <span className={`px-2.5 py-0.5 rounded-full font-bold text-xs ${
+                isPaid ? 'bg-[#8CD1B0] text-[#0F5B43]' : 'bg-[#FEF3C7] text-[#92400E]'
+              }`}>
+                {isPaid ? '✓ ĐÃ THANH TOÁN' : '⚠ CHƯA THANH TOÁN'}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Two Most Important Cards: 1. Payment Details & 2. Room Password */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* PAYMENT STATUS CARD */}
+        <div
+          id="section-payment-status"
+          className={`rounded-3xl p-5 sm:p-6 border shadow-sm flex flex-col justify-between ${
+            isPaid
+              ? 'bg-[#F2F8F5] border-[#B7DECB]'
+              : 'bg-[#FFFBEB] border-[#FDE68A]'
+          }`}
+        >
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CreditCard className={`w-5 h-5 ${isPaid ? 'text-[#0F5B43]' : 'text-[#D97706]'}`} />
+                <h3 className={`font-bold text-sm sm:text-base ${isPaid ? 'text-[#0F5B43]' : 'text-[#92400E]'}`}>
+                  Tình Trạng Thanh Toán
+                </h3>
+              </div>
+              <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                isPaid ? 'bg-[#0F5B43] text-white' : 'bg-[#D97706] text-white'
+              }`}>
+                {isPaid ? '✓ ĐÃ THANH TOÁN' : '⚠ CHƯA THANH TOÁN'}
+              </span>
+            </div>
+
+            <div className="pt-2">
+              <span className="text-xs text-[#526D60] block mb-1">Số tiền lưu trú:</span>
+              <div className={`text-2xl sm:text-3xl font-extrabold font-mono tracking-tight ${
+                isPaid ? 'text-[#0F5B43]' : 'text-[#92400E]'
+              }`}>
+                {formatCurrency(booking.paymentAmount)}
+              </div>
+            </div>
+          </div>
+
+          <p className="text-[11px] text-[#607A6D] pt-3 mt-2 border-t border-black/5">
+            {isPaid
+              ? 'Quý khách đã thanh toán đầy đủ tiền phòng. Không phát sinh thêm phí lưu trú tiêu chuẩn.'
+              : 'Vui lòng thanh toán trực tiếp cho lễ tân khi làm thủ tục nhận phòng.'}
+          </p>
+        </div>
+
+        {/* ROOM PASSWORD CARD (Directly visible) */}
+        <div
+          id="section-room-password"
+          className="bg-white rounded-3xl p-5 sm:p-6 border border-[#0F5B43]/30 shadow-sm flex flex-col justify-between relative overflow-hidden"
+        >
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Lock className="w-5 h-5 text-[#0F5B43]" />
+                <h3 className="font-bold text-sm sm:text-base text-[#0F5B43]">
+                  Mật Khẩu Vào Phòng
+                </h3>
+              </div>
+              <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-[#E8F1EC] text-[#0F5B43]">
+                Khóa điện tử
+              </span>
+            </div>
+
+            <div className="pt-2">
+              <span className="text-xs text-[#526D60] block mb-1">Mã mở cửa phòng:</span>
+              <div
+                id="display-room-password"
+                className="text-2xl sm:text-3xl font-extrabold font-mono text-[#0F5B43] tracking-widest bg-[#FAF9F4] px-4 py-2 rounded-2xl border border-[#D5E4DC] inline-block"
+              >
+                {booking.roomPassword || 'Chạm thẻ từ'}
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-3 mt-2 border-t border-[#EEF5F1] flex items-center justify-between gap-2">
+            <p className="text-[11px] text-[#607A6D]">
+              Nhập mã trên bảng số tại cửa phòng và nhấn # để mở khóa.
+            </p>
+            {booking.roomPassword && (
+              <button
+                id="btn-copy-room-password"
+                type="button"
+                onClick={handleCopyRoomPass}
+                className="no-print inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#E8F1EC] hover:bg-[#D6E8DD] text-[#0F5B43] text-xs font-bold transition-colors shrink-0"
+              >
+                {copiedRoomPass ? (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Đã chép</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Sao chép</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -190,18 +313,18 @@ export const RoomResultView: React.FC<RoomResultViewProps> = ({
             id="btn-print-guide"
             type="button"
             onClick={() => window.print()}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-[#D5E4DC] hover:border-[#0F5B43] text-[#2C483B] text-xs font-semibold shadow-xs transition-colors"
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white border border-[#D5E4DC] hover:border-[#0F5B43] text-[#2C483B] text-xs sm:text-sm font-semibold shadow-xs transition-colors"
           >
             <Printer className="w-4 h-4 text-[#0F5B43]" />
-            <span>In hướng dẫn</span>
+            <span>IN HƯỚNG DẪN</span>
           </button>
           <a
             id="btn-call-hotel-help"
             href={`tel:${HOTEL_INFO.hotline}`}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#0F5B43] hover:bg-[#166E53] text-white text-xs font-semibold shadow-xs transition-colors"
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#0F5B43] hover:bg-[#166E53] text-white text-xs sm:text-sm font-semibold shadow-xs transition-colors"
           >
-            <Phone className="w-3.5 h-3.5" />
-            <span>Gọi hỗ trợ ({HOTEL_INFO.hotlineFormatted})</span>
+            <Phone className="w-4 h-4" />
+            <span>GỌI LÁ HOTEL ({HOTEL_INFO.hotlineFormatted})</span>
           </a>
         </div>
 
@@ -209,9 +332,9 @@ export const RoomResultView: React.FC<RoomResultViewProps> = ({
           id="btn-lookup-again"
           type="button"
           onClick={onReset}
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#FAF9F4] border border-[#D5E4DC] text-[#4A6456] hover:text-[#0F5B43] text-xs font-semibold transition-colors"
+          className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#FAF9F4] border border-[#D5E4DC] text-[#4A6456] hover:text-[#0F5B43] text-xs sm:text-sm font-semibold transition-colors"
         >
-          <RotateCcw className="w-3.5 h-3.5" />
+          <RotateCcw className="w-4 h-4" />
           <span>Tra cứu phòng khác</span>
         </button>
       </div>
@@ -236,7 +359,7 @@ export const RoomResultView: React.FC<RoomResultViewProps> = ({
           </div>
         </div>
 
-        {/* 2. WI-FI */}
+        {/* 2. WI-FI (Directly visible) */}
         <div
           id="section-wifi-guide"
           className="bg-white rounded-3xl p-6 shadow-sm border border-[#E0ECE4] space-y-4"
@@ -269,20 +392,9 @@ export const RoomResultView: React.FC<RoomResultViewProps> = ({
 
             <div className="flex items-center justify-between pt-2 border-t border-[#E8F1EC]">
               <span className="text-xs font-semibold text-[#5A7366] uppercase">Mật khẩu:</span>
-              <div className="flex items-center gap-2">
-                <span id="wifi-password-text" className="font-mono font-bold text-sm text-[#1F2924]">
-                  {showWifiPassword ? booking.instructions.wifiPassword || 'lahotel2026' : '••••••••••••'}
-                </span>
-                <button
-                  id="btn-toggle-wifi-pass"
-                  type="button"
-                  onClick={() => setShowWifiPassword(!showWifiPassword)}
-                  className="p-1 rounded-md text-[#5A7366] hover:text-[#0F5B43] transition-colors"
-                  title={showWifiPassword ? 'Ẩn mật khẩu' : 'Hiển thị mật khẩu'}
-                >
-                  {showWifiPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
+              <span id="wifi-password-text" className="font-mono font-bold text-sm text-[#1F2924]">
+                {booking.instructions.wifiPassword || 'lahotel2026'}
+              </span>
             </div>
           </div>
 
@@ -296,7 +408,7 @@ export const RoomResultView: React.FC<RoomResultViewProps> = ({
               {copiedWifi ? (
                 <>
                   <Check className="w-4 h-4 text-[#0F5B43]" />
-                  <span>Đã sao chép mật khẩu!</span>
+                  <span>Đã sao chép mật khẩu Wi-Fi!</span>
                 </>
               ) : (
                 <>
@@ -345,7 +457,7 @@ export const RoomResultView: React.FC<RoomResultViewProps> = ({
             <div className="p-2 rounded-xl bg-[#E8F1EC]">
               <Car className="w-5 h-5 text-[#0F5B43]" />
             </div>
-            <h3 className="font-bold text-base text-[#0F5B43]">🚗 Hướng dẫn bãi xe</h3>
+            <h3 className="font-bold text-base text-[#0F5B43]">🚗 Bãi xe</h3>
           </div>
           <div className="text-sm text-[#2D4539] leading-relaxed whitespace-pre-line">
             {booking.instructions.parking || (
@@ -381,7 +493,7 @@ export const RoomResultView: React.FC<RoomResultViewProps> = ({
             <div className="p-2 rounded-xl bg-[#E8F1EC]">
               <BedDouble className="w-5 h-5 text-[#0F5B43]" />
             </div>
-            <h3 className="font-bold text-base text-[#0F5B43]">🛏 Thông tin trong phòng</h3>
+            <h3 className="font-bold text-base text-[#0F5B43]">🛏 Hướng dẫn trong phòng</h3>
           </div>
           <div className="text-sm text-[#2D4539] leading-relaxed whitespace-pre-line">
             {booking.instructions.roomInstructions || (
@@ -399,7 +511,7 @@ export const RoomResultView: React.FC<RoomResultViewProps> = ({
         >
           <div className="flex items-center gap-2 text-[#0F5B43]">
             <Info className="w-5 h-5 text-[#0F5B43]" />
-            <h4 className="font-bold text-sm sm:text-base">📌 Lưu ý quan trọng</h4>
+            <h4 className="font-bold text-sm sm:text-base">⚠️ Lưu ý quan trọng</h4>
           </div>
           <div className="text-sm text-[#385144] leading-relaxed whitespace-pre-line pl-7">
             {booking.instructions.importantNotes}
